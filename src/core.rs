@@ -341,7 +341,7 @@ pub mod execution {
                     Err(e) => Err(e),
                 }
             }
-            return Err(Error::new(ErrorKind::NotFound, self.entry_point + " proc not found "));
+            return Err(Error::new(ErrorKind::NotFound, self.entry_point + " proc not found"));
         }
 
         fn search_func<'a>(&self, name : &'a str) -> Option<&Proc> {

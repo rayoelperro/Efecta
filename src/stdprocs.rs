@@ -157,7 +157,7 @@ impl ProcExecution for EPLst {
         if let Some(n) = assert_len(input.len(), 1) {
             return Err(n);
         }
-        return Ok(Box::new(types::ETFloat::new(input[0].literal())?));
+        return Ok(Box::new(types::ETList::new(input[0].clone())));
     }
 }
 

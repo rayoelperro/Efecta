@@ -1,0 +1,15 @@
+PROGRAM-ID TESTING
+ENTER-IN MAIN
+
+PROC MAIN
+	LIT WELCOME #Hello, World
+	DISPLAY WELCOME ;a simple comment example
+	ENDL
+	PUSH
+		*LEN
+			*GET WELCOME
+	DEF INT LENGTH RECV
+	DISPLAY
+		*GET LENGTH
+		#Now a number :
+		3.14 ;For example the beginning of pi
