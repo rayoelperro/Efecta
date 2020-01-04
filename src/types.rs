@@ -48,9 +48,23 @@ impl ETFloat {
 }
 
 #[derive(Clone)]
-pub struct ETMap(i32);
+pub struct ETList(Vec<Box<dyn Value>>);
+impl Value for ETList {
+    fn list(&self) -> Option<Box<Self>> {
+        return Some(Box::new(ETList(self.0.clone())));
+    }
+    fn literal(&self) -> String {
+        return "TODO: LIST Literal".to_owned();
+    }
+}
+impl ETList {
+    pub fn new(v : Box<dyn Value>) -> Self {
+        return ETList(vec![v])
+    }
+}
+
 #[derive(Clone)]
-pub struct ETList(i32);
+pub struct ETMap(i32);
 
 #[derive(Clone)]
 pub struct ETString(pub String); //Literal Value

@@ -92,10 +92,15 @@ impl ProcExecution for EPArg {
         if let Some(n) = assert_len(input.len(), 1) {
             return Err(n);
         }
-        if let Some(n) = assert_type(input[0].clone(), StrictType::Integer) {
-            return Err(n);
+        let mut iv = input[0].clone();
+        if let Some(_) = assert_type(input[0].clone(), StrictType::Integer) {
+            if let Some(n) = assert_type_lit(input[0].literal(), LiteralParsableType::Integer) {
+                return Err(n);
+            } else {
+                iv = Box::new(types::ETInt::new(input[0].literal())?);
+            }
         }
-        let x = input[0].int().unwrap();
+        let x = iv.int().unwrap();
         return Ok(c.args[x.0 as usize].clone());
     }
 }
@@ -114,11 +119,56 @@ impl ProcExecution for EPInt {
     }
 }
 
+pub struct EPLit;
+impl ProcExecution for EPLit {
+    fn name(&self) -> String {
+        "LIT".to_owned()
+    }
+
+    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if let Some(n) = assert_len(input.len(), 1) {
+            return Err(n);
+        }
+        return Ok(Box::new(types::ETString(input[0].literal())));
+    }
+}
+
+pub struct EPFloat;
+impl ProcExecution for EPFloat {
+    fn name(&self) -> String {
+        "FLOAT".to_owned()
+    }
+
+    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if let Some(n) = assert_len(input.len(), 1) {
+            return Err(n);
+        }
+        return Ok(Box::new(types::ETFloat::new(input[0].literal())?));
+    }
+}
+
+pub struct EPLst;
+impl ProcExecution for EPLst {
+    fn name(&self) -> String {
+        "LST".to_owned()
+    }
+
+    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if let Some(n) = assert_len(input.len(), 1) {
+            return Err(n);
+        }
+        return Ok(Box::new(types::ETFloat::new(input[0].literal())?));
+    }
+}
+
 pub fn get_standard_procs() -> Vec<Box<dyn ProcExecution>> {
     return vec![
         Box::new(EPDisplay{}),
         Box::new(EPReturn{}),
         Box::new(EPArg{}),
-        Box::new(EPInt{})
+        Box::new(EPInt{}),
+        Box::new(EPLit{}),
+        Box::new(EPFloat{}),
+        Box::new(EPLst{})
     ];
 }
