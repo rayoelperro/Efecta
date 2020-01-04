@@ -3,7 +3,7 @@ ENTER-IN MAIN
 
 PROC MAIN
 	LIT WELCOME #Hello, World
-	DISPLAY WELCOME ;that wont be readed
+	DISPLAY WELCOME ;a simple comment example
 	ENDL
 	PUSH
 		*LEN
