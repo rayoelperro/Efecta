@@ -1,1 +1,0 @@
-/home/alberto/Documentos/Proyects/Rust/Efecta/target/debug/efecta: /home/alberto/Documentos/Proyects/Rust/Efecta/src/core.rs /home/alberto/Documentos/Proyects/Rust/Efecta/src/main.rs /home/alberto/Documentos/Proyects/Rust/Efecta/src/stdprocs.rs /home/alberto/Documentos/Proyects/Rust/Efecta/src/types.rs
