@@ -336,7 +336,8 @@ pub mod execution {
             if let Some(x) = self.search_func(&self.entry_point) {
                 let standard = get_standard_procs();
                 let r = RunningInstance::from(self.clone(), standard);
-                return match x.run(&r, Vec::new(), &mut Context::new(&r, ETString::literal_array(&string_args(std::env::args())))) {
+                let args = ETString::literal_array(&string_args(std::env::args()));
+                return match x.run(&r, args.clone(), &mut Context::new(&r, args)) {
                     Ok(_) => Ok(0),
                     Err(e) => Err(e),
                 }

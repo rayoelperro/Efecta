@@ -3,4 +3,7 @@ ENTER-IN MAIN
 
 PROC MAIN
 	DISPLAY
-		*ARG 0
+		*ARG
+			0
+			1
+			2
