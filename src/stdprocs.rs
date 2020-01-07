@@ -1,6 +1,7 @@
 use crate::core::runtime::{RunningInstance, ProcExecution, Value, Context};
 use std::io::{Error, ErrorKind};
 use crate::types;
+use std::collections::HashMap;
 
 pub enum StrictType {
     Integer,
@@ -36,7 +37,7 @@ pub fn assert_type(data : &Box<dyn Value>, exp : StrictType) -> Option<Error> {
     if expected.is_empty() {
         return None;
     }
-    return Some(Error::new(ErrorKind::Other, expected + " type expected"));;
+    return Some(Error::new(ErrorKind::Other, expected + " type expected"));
 }
 
 pub fn assert_type_lit(data : String, exp : LiteralParsableType) -> Option<Error> {
@@ -49,7 +50,7 @@ pub fn assert_type_lit(data : String, exp : LiteralParsableType) -> Option<Error
     if expected.is_empty() {
         return None;
     }
-    return Some(Error::new(ErrorKind::Other, expected + " type expected"));;
+    return Some(Error::new(ErrorKind::Other, expected + " type expected"));
 }
 
 pub fn expect_int(v : &Box<dyn Value>) -> Result<Box<types::ETInt>, Error> {
@@ -155,6 +156,35 @@ impl ProcExecution for EPLst {
 }
 
 #[derive(Clone)]
+pub struct EPMap;
+impl ProcExecution for EPMap {
+    fn name(&self) -> String {
+        "MAP".to_owned()
+    }
+
+    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if let Some(n) = assert_len(input.len(), 2) {
+            if input.len() == 3 {
+                let mapc = match c.variables.get(&input[0].literal()) {
+                    Some(x) => x.clone(),
+                    None => Box::new(types::ETMap(HashMap::new())),
+                };
+                if let Some(e) = assert_type(&mapc, StrictType::Map) {
+                    return Err(e);
+                }
+                let mut map = mapc.map().unwrap();
+                map.add(input[1].literal(), input[2].clone());
+                c.variables.insert(input[0].literal(), map.clone());
+                return Ok(map);
+            } else {
+                return Err(n);
+            }
+        }
+        return Ok(Box::new(types::ETMap::new(input[0].literal(), input[1].clone())));
+    }
+}
+
+#[derive(Clone)]
 pub struct EPGet;
 impl ProcExecution for EPGet {
     fn name(&self) -> String {
@@ -165,11 +195,15 @@ impl ProcExecution for EPGet {
         if let Some(n) = assert_len(input.len(), 2) {
             return Err(n);
         }
-        if let Some(n) = assert_type(&input[0], StrictType::List) {
-            return Err(n);
+        return match input[0].list() {
+            Some(n) => Ok(n.get(expect_int(&input[1])?.0.clone() as usize)?.clone()),
+            None => {
+                match input[0].map() {
+                    Some(n) => Ok(n.get(&input[1].literal())?),
+                    None => Err(Error::new(ErrorKind::InvalidInput, "Expected list or map")),
+                }
+            }
         }
-        let ret = input[0].list().unwrap().get(expect_int(&input[1])?.0.clone() as usize)?.clone();
-        return Ok(ret);
     }
 }
 
@@ -181,6 +215,7 @@ pub fn get_standard_procs() -> Vec<Box<dyn ProcExecution>> {
         Box::new(EPLit{}),
         Box::new(EPFloat{}),
         Box::new(EPLst{}),
+        Box::new(EPMap{}),
         Box::new(EPGet{})
     ];
 }

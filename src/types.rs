@@ -1,6 +1,7 @@
 use crate::core::runtime::{Value, ProcExecution};
 use std::io::{Error, ErrorKind};
 use crate::stdprocs as procs;
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct ETVoid;
@@ -75,13 +76,54 @@ impl ETList {
 }
 
 #[derive(Clone)]
-pub struct ETMap(i32);
+pub struct ETMap(pub HashMap<String, Box<dyn Value>>);
+impl Value for ETMap {
+    fn map(&self) -> Option<Box<Self>> {
+        return Some(Box::new(self.clone()));
+    }
+    fn literal(&self) -> String {
+        return "TODO: MAP Literal".to_owned();
+    }
+    fn function(&self) -> Option<Box<dyn ProcExecution>> {
+        return Some(Box::new(procs::EPGet{}));
+    }
+}
+impl ETMap {
+    pub fn new(k : String, v : Box<dyn Value>) -> Self {
+        return ETMap({
+            let mut x = HashMap::new();
+            x.insert(k, v);
+            x
+        });
+    }
+
+    pub fn add(&mut self, k : String, v : Box<dyn Value>) {
+        self.0.insert(k, v);
+    }
+
+    pub fn get<'a>(&self, idx : &'a str) -> Result<Box<dyn Value>, Error> {
+        return match self.0.get(idx) {
+            Some(n) => Ok(n.clone()),
+            None => Err(Error::new(ErrorKind::InvalidData, "Invalid key"))
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct ETString(pub String); //Literal Value
 impl Value for ETString {    
     fn literal(&self) -> String {
         return self.0.clone();
+    }
+
+    fn list(&self) -> Option<Box<ETList>> {
+        return Some(Box::new(ETList({
+            let mut res = Vec::<Box<dyn Value>>::new();
+            for v in self.0.clone().chars() {
+                res.push(Box::new(ETString(v.to_string())))
+            }
+            res
+        })))
     }
 }
 
