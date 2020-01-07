@@ -1,5 +1,6 @@
-use crate::core::runtime::Value;
+use crate::core::runtime::{Value, ProcExecution};
 use std::io::{Error, ErrorKind};
+use crate::stdprocs as procs;
 
 #[derive(Clone)]
 pub struct ETVoid;
@@ -48,7 +49,7 @@ impl ETFloat {
 }
 
 #[derive(Clone)]
-pub struct ETList(Vec<Box<dyn Value>>);
+pub struct ETList(pub Vec<Box<dyn Value>>);
 impl Value for ETList {
     fn list(&self) -> Option<Box<Self>> {
         return Some(Box::new(ETList(self.0.clone())));
@@ -56,10 +57,20 @@ impl Value for ETList {
     fn literal(&self) -> String {
         return "TODO: LIST Literal".to_owned();
     }
+    fn function(&self) -> Option<Box<dyn ProcExecution>> {
+        return Some(Box::new(procs::EPGet{}));
+    }
 }
 impl ETList {
     pub fn new(v : Box<dyn Value>) -> Self {
         return ETList(vec![v])
+    }
+
+    pub fn get(&self, idx : usize) -> Result<Box<dyn Value>, Error> {
+        return match self.0.get(idx) {
+            Some(n) => Ok(n.clone()),
+            None => Err(Error::new(ErrorKind::InvalidData, "Index out bounds"))
+        }
     }
 }
 
@@ -68,16 +79,28 @@ pub struct ETMap(i32);
 
 #[derive(Clone)]
 pub struct ETString(pub String); //Literal Value
-impl Value for ETString {
+impl Value for ETString {    
     fn literal(&self) -> String {
         return self.0.clone();
     }
 }
-impl ETString {
+
+#[derive(Clone)]
+pub struct ETLiteral(pub String); //Literal Value(Always typed by the user)
+impl Value for ETLiteral {
+    fn is_literal(&self) -> bool {
+        true
+    }
+
+    fn literal(&self) -> String {
+        return self.0.clone();
+    }
+}
+impl ETLiteral {
     pub fn literal_array<'a>(data : &'a Vec<String>) -> Vec<Box<dyn Value>> {
         let mut res = Vec::new();
         for x in data {
-            res.push(Box::new(ETString(String::from(x))) as Box<dyn Value>);
+            res.push(Box::new(ETLiteral(String::from(x))) as Box<dyn Value>);
         }
         return res;
     }

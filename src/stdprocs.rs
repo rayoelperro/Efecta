@@ -2,7 +2,7 @@ use crate::core::runtime::{RunningInstance, ProcExecution, Value, Context};
 use std::io::{Error, ErrorKind};
 use crate::types;
 
-enum StrictType {
+pub enum StrictType {
     Integer,
     Float,
     Char,
@@ -10,13 +10,13 @@ enum StrictType {
     Map
 }
 
-enum LiteralParsableType {
+pub enum LiteralParsableType {
     Integer,
     Float,
     Char,
 }
 
-fn assert_len(act : usize, exp : usize) -> Option<Error> {
+pub fn assert_len(act : usize, exp : usize) -> Option<Error> {
     if act != exp {
         let r : String = format!("Expected {} and got {}", exp, act);
         return Some(Error::new(ErrorKind::Other, r));
@@ -24,7 +24,7 @@ fn assert_len(act : usize, exp : usize) -> Option<Error> {
     return None;
 }
 
-fn assert_type(data : Box<dyn Value>, exp : StrictType) -> Option<Error> {
+pub fn assert_type(data : &Box<dyn Value>, exp : StrictType) -> Option<Error> {
     let mut expected = String::new();
     match exp {
         StrictType::Integer => if let None = data.int() {expected.push_str("Integer")}
@@ -39,7 +39,7 @@ fn assert_type(data : Box<dyn Value>, exp : StrictType) -> Option<Error> {
     return Some(Error::new(ErrorKind::Other, expected + " type expected"));;
 }
 
-fn assert_type_lit(data : String, exp : LiteralParsableType) -> Option<Error> {
+pub fn assert_type_lit(data : String, exp : LiteralParsableType) -> Option<Error> {
     let mut expected = String::new();
     match exp {
         LiteralParsableType::Integer => if let Err(_) = types::ETInt::new(data) {expected.push_str("Integer")}
@@ -52,6 +52,17 @@ fn assert_type_lit(data : String, exp : LiteralParsableType) -> Option<Error> {
     return Some(Error::new(ErrorKind::Other, expected + " type expected"));;
 }
 
+pub fn expect_int(v : &Box<dyn Value>) -> Result<Box<types::ETInt>, Error> {
+    if let Some(_) = assert_type(v, StrictType::Integer) {
+        if let Some(e) = assert_type_lit(v.literal(), LiteralParsableType::Integer) {
+            return Err(e);
+        }
+        return Ok(Box::new(types::ETInt::new(v.literal())?))
+    }
+    return Ok(v.int().unwrap());
+}
+
+#[derive(Clone)]
 pub struct EPDisplay;
 impl ProcExecution for EPDisplay {
     fn name(&self) -> String {
@@ -67,6 +78,7 @@ impl ProcExecution for EPDisplay {
     }
 }
 
+#[derive(Clone)]
 pub struct EPReturn;
 impl ProcExecution for EPReturn {
     fn name(&self) -> String {
@@ -82,29 +94,7 @@ impl ProcExecution for EPReturn {
     }
 }
 
-pub struct EPArg;
-impl ProcExecution for EPArg {
-    fn name(&self) -> String {
-        "ARG".to_owned()
-    }
-
-    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
-        if let Some(n) = assert_len(input.len(), 1) {
-            return Err(n);
-        }
-        let mut iv = input[0].clone();
-        if let Some(_) = assert_type(input[0].clone(), StrictType::Integer) {
-            if let Some(n) = assert_type_lit(input[0].literal(), LiteralParsableType::Integer) {
-                return Err(n);
-            } else {
-                iv = Box::new(types::ETInt::new(input[0].literal())?);
-            }
-        }
-        let x = iv.int().unwrap();
-        return Ok(c.args[x.0 as usize].clone());
-    }
-}
-
+#[derive(Clone)]
 pub struct EPInt;
 impl ProcExecution for EPInt {
     fn name(&self) -> String {
@@ -119,6 +109,7 @@ impl ProcExecution for EPInt {
     }
 }
 
+#[derive(Clone)]
 pub struct EPLit;
 impl ProcExecution for EPLit {
     fn name(&self) -> String {
@@ -133,6 +124,7 @@ impl ProcExecution for EPLit {
     }
 }
 
+#[derive(Clone)]
 pub struct EPFloat;
 impl ProcExecution for EPFloat {
     fn name(&self) -> String {
@@ -147,6 +139,7 @@ impl ProcExecution for EPFloat {
     }
 }
 
+#[derive(Clone)]
 pub struct EPLst;
 impl ProcExecution for EPLst {
     fn name(&self) -> String {
@@ -161,14 +154,33 @@ impl ProcExecution for EPLst {
     }
 }
 
+#[derive(Clone)]
+pub struct EPGet;
+impl ProcExecution for EPGet {
+    fn name(&self) -> String {
+        "GET".to_owned()
+    }
+
+    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if let Some(n) = assert_len(input.len(), 2) {
+            return Err(n);
+        }
+        if let Some(n) = assert_type(&input[0], StrictType::List) {
+            return Err(n);
+        }
+        let ret = input[0].list().unwrap().get(expect_int(&input[1])?.0.clone() as usize)?.clone();
+        return Ok(ret);
+    }
+}
+
 pub fn get_standard_procs() -> Vec<Box<dyn ProcExecution>> {
     return vec![
         Box::new(EPDisplay{}),
         Box::new(EPReturn{}),
-        Box::new(EPArg{}),
         Box::new(EPInt{}),
         Box::new(EPLit{}),
         Box::new(EPFloat{}),
-        Box::new(EPLst{})
+        Box::new(EPLst{}),
+        Box::new(EPGet{})
     ];
 }

@@ -66,7 +66,7 @@ pub mod lexer {
                         }
                         break;
                     }
-                    '*' => {
+                    '*' | '$' | '!' => {
                         mxt = true;
                         if act.chars().count() > 0 {
                             ret.push(act);
@@ -132,12 +132,28 @@ pub mod runtime {
     use std::collections::HashMap;
     use std::io::{Error, ErrorKind};
     use crate::core::{ProgramInstance, Proc, Block};
-    use crate::types::{join_values, ETInt, ETFloat, ETList, ETMap, ETString};
+    use crate::types::{join_values, ETInt, ETFloat, ETList, ETMap, ETLiteral};
 
     pub struct RunningInstance {
         pub name : String,
         pub entry_point : String,
         pub methods : Vec<Box<dyn ProcExecution>>
+    }
+
+    fn parse_params(c : &mut Context, params : Vec<Box<dyn Value>>) -> Result<Vec<Box<dyn Value>>, Error> {
+        let mut res = Vec::new();
+        let mut nxc = false;
+        for p in params.into_iter() {
+            if p.is_literal() && (p.literal() == "$" || p.literal() == "!") {
+                nxc = true;
+            } else if nxc {
+                res.push(c.get_var(&p.literal())?);
+                nxc = false;
+            } else {
+                res.push(p);
+            }
+        }
+        return Ok(res);
     }
 
     impl<'a> Block {
@@ -154,26 +170,30 @@ pub mod runtime {
         }
 
         fn run(&self, c : &mut Context, proc_scope : bool) -> Result<Vec<Vec<Box<dyn Value>>>, Error> {
-            let x = if self.data[0] == "*" {1} else {0};
+            let x = if self.data[0] == "*" || self.data[0] == "$" {1} else {0};
             if x == 1 && proc_scope {
                 return Err(Error::new(ErrorKind::InvalidData, "Not necessary execution specifier"));
-            }
-            if proc_scope || x == 1 {
-                if let Some(n) = c.get_proc(&self.data[x]) {
-                    let pr : &Box<dyn ProcExecution> = &c.instance.methods[n];
+            } else if proc_scope || x == 1 {
+                if let Some(n) = c.get_proc(self.data[0] == "$", &self.data[x])? {
+                    let pr : Box<dyn ProcExecution> = n;
                     let mut result : Vec<Vec<Box<dyn Value>>> = Vec::new();
-                    let args : Vec<Box<dyn Value>> =
-                        ETString::literal_array(&self.data.clone().drain((x+1)..).collect());
+                    let mut args : Vec<Box<dyn Value>> =
+                        ETLiteral::literal_array(&self.data.clone().drain((x+1)..).collect());
+                    if self.data[0] == "$" {
+                        if let Some(n) = c.variables.get(&self.data[x]) {
+                            args.insert(0, n.clone());
+                        }
+                    }
                     if self.subs.len() > 0 {
                         for x in self.subs.iter() {
                             for v in x.run(c, false)? {
-                                let res = join_values(args.clone(), v.clone());
+                                let res = parse_params(c, join_values(args.clone(), v.clone()))?;
                                 let ret = pr.run(c.instance, res, c)?;
                                 result.push(vec![ret]);
                             }
                         }
                     } else {
-                        let ret = pr.run(c.instance, args, c)?;
+                        let ret = pr.run(c.instance, parse_params(c, args)?, c)?;
                         result.push(vec![ret])
                     }
                     return Ok(result);
@@ -182,7 +202,7 @@ pub mod runtime {
                 }
             } else {
                 let mut total : Vec<Vec<Box<dyn Value>>> = Vec::new();
-                let local : Vec<Box<dyn Value>> = ETString::literal_array(&self.data.clone());
+                let local : Vec<Box<dyn Value>> = ETLiteral::literal_array(&self.data.clone());
                 if self.subs.len() > 0 {
                     for x in self.subs.iter() {
                         for v in x.run(c, false)? {
@@ -230,24 +250,38 @@ pub mod runtime {
         pub instance : &'a RunningInstance,
         pub stack : Vec<String>,
         pub variables : HashMap<String, Box<dyn Value>>,
-        pub args : Vec<Box<dyn Value>>,
         pub ret : Box<dyn Value>,
         pub running : bool
     }
 
     impl<'a> Context<'a> {
         pub fn new(ins : &'a RunningInstance, input : Vec<Box<dyn Value>>) -> Self {
-            return Context{instance:ins, stack:Vec::new(), variables:HashMap::new(),
-                args:input, ret:Box::new(crate::types::ETVoid{}), running:true};
+            let mut c = Context{instance:ins, stack:Vec::new(), variables:HashMap::new(),
+                ret:Box::new(crate::types::ETVoid{}), running:true};
+            c.variables.insert("ARGS".to_owned(), Box::new(ETList(input)));
+            return c;
         }
 
-        pub fn get_proc(&self, name : &'a str) -> Option<usize> {
-            for x in 0..self.instance.methods.len() {
-                if self.instance.methods[x].name() == name {
-                    return Some(x);
+        pub fn get_proc(&self, variable : bool, name : &'a str) -> Result<Option<Box<dyn ProcExecution>>, Error> {
+            if variable {
+                if let Some(r) = (self.get_var(name)?).function() {
+                    return Ok(Some(r));
+                }
+            } else {
+                for x in 0..self.instance.methods.len() {
+                    if self.instance.methods[x].name() == name {
+                        return Ok(Some(self.instance.methods[x].clone()));
+                    }
                 }
             }
-            return None;
+            return Ok(None);
+        }
+
+        pub fn get_var(&self, name : &'a str) -> Result<Box<dyn Value>, Error> {
+            if let Some(n) = self.variables.get(name) {
+                return Ok(n.clone());
+            }
+            return Err(Error::new(ErrorKind::InvalidInput, "Error searching variable"));
         }
     }
 
@@ -257,18 +291,24 @@ pub mod runtime {
 
     pub trait Value : CloneValue {
         fn list(&self) -> Option<Box<ETList>> {
-            return None;
+            None
         }
         fn map(&self) -> Option<Box<ETMap>> {
-            return None;
+            None
         }
         fn int(&self) -> Option<Box<ETInt>> {
-            return None;
+            None
         }
         fn float(&self) -> Option<Box<ETFloat>> {
-            return None;
+            None
         }
         fn literal(&self) -> String;
+        fn is_literal(&self) -> bool {
+            false
+        }
+        fn function(&self) -> Option<Box<dyn ProcExecution>> {
+            None
+        }
     }
 
     impl<T> CloneValue for T where T : 'static + Value + Clone {
@@ -283,9 +323,25 @@ pub mod runtime {
         }
     }
 
-    pub trait ProcExecution {
+    pub trait CloneProc {
+        fn clone_box(&self) -> Box<dyn ProcExecution>;
+    }
+
+    pub trait ProcExecution : CloneProc {
         fn name(&self) -> String;
         fn run(&self, ins : &RunningInstance, input : Vec<Box<dyn Value>>, context : &mut Context) -> Result<Box<dyn Value>, Error>;
+    }
+
+    impl<T> CloneProc for T where T : 'static + ProcExecution + Clone {
+        fn clone_box(&self) -> Box<dyn ProcExecution> {
+            return Box::new(self.clone());
+        }
+    }
+
+    impl Clone for Box<dyn ProcExecution> {
+        fn clone(&self) -> Box<dyn ProcExecution> {
+            return self.clone_box();
+        }
     }
 }
 
@@ -294,7 +350,7 @@ pub mod execution {
     use crate::core::{ProgramInstance, Block, Proc};
     use crate::core::runtime::{RunningInstance, ProcExecution, Context};
     use crate::stdprocs::get_standard_procs;
-    use crate::types::ETString;
+    use crate::types::ETLiteral;
 
     impl ProgramInstance {
         pub fn from(global : Vec<Block>) -> Result<Self, Error> {
@@ -336,7 +392,7 @@ pub mod execution {
             if let Some(x) = self.search_func(&self.entry_point) {
                 let standard = get_standard_procs();
                 let r = RunningInstance::from(self.clone(), standard);
-                let args = ETString::literal_array(&string_args(std::env::args()));
+                let args = ETLiteral::literal_array(&string_args(std::env::args()));
                 return match x.run(&r, args.clone(), &mut Context::new(&r, args)) {
                     Ok(_) => Ok(0),
                     Err(e) => Err(e),
