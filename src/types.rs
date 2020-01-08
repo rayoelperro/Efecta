@@ -31,7 +31,7 @@ impl ETInt {
 }
 
 #[derive(Copy, Clone)]
-pub struct ETFloat(f64);
+pub struct ETFloat(pub f64);
 impl Value for ETFloat {
     fn float(&self) -> Option<Box<Self>> {
         return Some(Box::new(*self));
@@ -64,7 +64,11 @@ impl Value for ETList {
 }
 impl ETList {
     pub fn new(v : Box<dyn Value>) -> Self {
-        return ETList(vec![v])
+        return ETList(vec![v]);
+    }
+
+    pub fn add(&mut self, val : Box<dyn Value>) {
+        self.0.push(val);
     }
 
     pub fn get(&self, idx : usize) -> Result<Box<dyn Value>, Error> {
@@ -114,6 +118,10 @@ pub struct ETString(pub String); //Literal Value
 impl Value for ETString {    
     fn literal(&self) -> String {
         return self.0.clone();
+    }
+
+    fn stringval(&self) -> Option<Box<Self>> {
+        return Some(Box::new(self.clone()));
     }
 
     fn list(&self) -> Option<Box<ETList>> {

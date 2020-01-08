@@ -1,0 +1,13 @@
+PROGRAM-ID LISTS
+ENTER-IN LISTTEST
+
+PROC LISTTEST
+	LST HOLA
+		Alberto
+		Elorza
+		Rubio
+	DISPLAY
+		$HOLA
+			0
+			1
+			2

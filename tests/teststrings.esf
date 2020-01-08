@@ -1,0 +1,11 @@
+PROGRAM-ID STRINGS
+ENTER-IN MAIN
+
+PROC MAIN
+	LIT A
+		Hello,
+		# 
+		#World!
+
+	;We are going to print Hello, World!
+	DISPLAY $A

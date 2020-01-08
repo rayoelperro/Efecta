@@ -54,6 +54,7 @@ pub mod lexer {
                     }
                     '#' => {
                         //LITERAL (GOOD FOR STRINGS)
+                        mxt = true;
                         if act.chars().count() > 0 {
                             ret.push(act.clone());
                         }
@@ -75,7 +76,6 @@ pub mod lexer {
                         ret.push(v.to_string());
                     }
                     ' ' => {
-                        mxt = true;
                         if act.chars().count() > 0 {
                             ret.push(act);
                             act = String::new();
@@ -90,6 +90,9 @@ pub mod lexer {
             if l == ln.chars().count()-1 && act.chars().count() > 0{
                 ret.push(act.clone());
             }
+        }
+        if !mxt {
+            ret.clear();
         }
         return Ok(ret);
     }
@@ -132,7 +135,7 @@ pub mod runtime {
     use std::collections::HashMap;
     use std::io::{Error, ErrorKind};
     use crate::core::{ProgramInstance, Proc, Block};
-    use crate::types::{join_values, ETInt, ETFloat, ETList, ETMap, ETLiteral};
+    use crate::types::{join_values, ETInt, ETFloat, ETList, ETMap, ETLiteral, ETString};
 
     pub struct RunningInstance {
         pub name : String,
@@ -300,6 +303,9 @@ pub mod runtime {
             None
         }
         fn float(&self) -> Option<Box<ETFloat>> {
+            None
+        }
+        fn stringval(&self) -> Option<Box<ETString>> {
             None
         }
         fn literal(&self) -> String;

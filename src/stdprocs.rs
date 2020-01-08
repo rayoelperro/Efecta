@@ -8,13 +8,38 @@ pub enum StrictType {
     Float,
     Char,
     List,
-    Map
+    Map,
+    Literal
 }
 
 pub enum LiteralParsableType {
     Integer,
     Float,
     Char,
+}
+
+fn value_from_type(stype : StrictType) -> Box<dyn Value> {
+    match stype {
+        StrictType::Integer => Box::new(types::ETInt(0)),
+        StrictType::Float => Box::new(types::ETFloat(0.0)),
+        StrictType::Char => Box::new(types::ETString(std::char::from_u32(0).unwrap().to_string())),
+        StrictType::List => Box::new(types::ETList(Vec::new())),
+        StrictType::Map => Box::new(types::ETMap(HashMap::new())),
+        StrictType::Literal => Box::new(types::ETString(String::new())),
+    }
+}
+
+impl<'a> Context<'a> {    
+    fn expect_variable(&self, name : String, stype : StrictType) -> Result<Box<dyn Value>, Error> {
+        match self.get_var(&name) {
+            Ok(v) => if let Some(e) = assert_type(&v, stype) {
+                Err(Error::new(ErrorKind::InvalidInput, "The variable does not match the expected type"))
+            } else {
+                Ok(v)
+            }
+            Err(_) => Ok(value_from_type(stype))
+        }
+    }
 }
 
 pub fn assert_len(act : usize, exp : usize) -> Option<Error> {
@@ -33,6 +58,7 @@ pub fn assert_type(data : &Box<dyn Value>, exp : StrictType) -> Option<Error> {
         StrictType::Char => if data.literal().chars().count() != 1 {expected.push_str("Char")}
         StrictType::List => if let None = data.list() {expected.push_str("List")}
         StrictType::Map => if let None = data.map() {expected.push_str("Map")}
+        StrictType::Literal => {}
     }
     if expected.is_empty() {
         return None;
@@ -117,9 +143,16 @@ impl ProcExecution for EPLit {
         "LIT".to_owned()
     }
 
-    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
         if let Some(n) = assert_len(input.len(), 1) {
-            return Err(n);
+            if input.len() == 2 {
+                let mut e = c.expect_variable(input[0].literal(), StrictType::Literal)?.stringval().unwrap();
+                e.0.push_str(&input[1].literal());
+                c.variables.insert(input[0].literal(), e.clone());
+                return Ok(e);
+            } else {
+                return Err(n);
+            }
         }
         return Ok(Box::new(types::ETString(input[0].literal())));
     }
@@ -147,8 +180,14 @@ impl ProcExecution for EPLst {
         "LST".to_owned()
     }
 
-    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
         if let Some(n) = assert_len(input.len(), 1) {
+            if input.len() == 2 {
+                let mut list = c.expect_variable(input[0].literal(), StrictType::List)?.list().unwrap();
+                list.add(input[1].clone());
+                c.variables.insert(input[0].literal(), list.clone());
+                return Ok(list);
+            }
             return Err(n);
         }
         return Ok(Box::new(types::ETList::new(input[0].clone())));
@@ -165,20 +204,12 @@ impl ProcExecution for EPMap {
     fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
         if let Some(n) = assert_len(input.len(), 2) {
             if input.len() == 3 {
-                let mapc = match c.variables.get(&input[0].literal()) {
-                    Some(x) => x.clone(),
-                    None => Box::new(types::ETMap(HashMap::new())),
-                };
-                if let Some(e) = assert_type(&mapc, StrictType::Map) {
-                    return Err(e);
-                }
-                let mut map = mapc.map().unwrap();
+                let mut map = c.expect_variable(input[0].literal(), StrictType::Map)?.map().unwrap();
                 map.add(input[1].literal(), input[2].clone());
                 c.variables.insert(input[0].literal(), map.clone());
                 return Ok(map);
-            } else {
-                return Err(n);
             }
+            return Err(n);
         }
         return Ok(Box::new(types::ETMap::new(input[0].literal(), input[1].clone())));
     }
