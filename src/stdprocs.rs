@@ -32,7 +32,7 @@ fn value_from_type(stype : StrictType) -> Box<dyn Value> {
 impl<'a> Context<'a> {    
     fn expect_variable(&self, name : String, stype : StrictType) -> Result<Box<dyn Value>, Error> {
         match self.get_var(&name) {
-            Ok(v) => if let Some(e) = assert_type(&v, stype) {
+            Ok(v) => if let Some(_) = assert_type(&v, stype) {
                 Err(Error::new(ErrorKind::InvalidInput, "The variable does not match the expected type"))
             } else {
                 Ok(v)
@@ -89,6 +89,16 @@ pub fn expect_int(v : &Box<dyn Value>) -> Result<Box<types::ETInt>, Error> {
     return Ok(v.int().unwrap());
 }
 
+pub fn expect_float(v : &Box<dyn Value>) -> Result<Box<types::ETFloat>, Error> {
+    if let Some(_) = assert_type(v, StrictType::Float) {
+        if let Some(e) = assert_type_lit(v.literal(), LiteralParsableType::Float) {
+            return Err(e);
+        }
+        return Ok(Box::new(types::ETFloat::new(v.literal())?))
+    }
+    return Ok(v.float().unwrap());
+}
+
 #[derive(Clone)]
 pub struct EPDisplay;
 impl ProcExecution for EPDisplay {
@@ -128,9 +138,18 @@ impl ProcExecution for EPInt {
         "INT".to_owned()
     }
 
-    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
         if let Some(n) = assert_len(input.len(), 1) {
+            if input.len() == 2 {
+                let mut i = c.expect_variable(input[0].literal(), StrictType::Integer)?.int().unwrap();
+                i.0 += expect_int(&input[1])?.0;
+                c.variables.insert(input[0].literal(), i.clone());
+                return Ok(i);
+            }
             return Err(n);
+        }
+        if let None = assert_type(&input[0], StrictType::Float) {
+            return Ok(Box::new(types::ETInt(input[0].float().unwrap().0 as i32)));
         }
         return Ok(Box::new(types::ETInt::new(input[0].literal())?));
     }
@@ -150,9 +169,8 @@ impl ProcExecution for EPLit {
                 e.0.push_str(&input[1].literal());
                 c.variables.insert(input[0].literal(), e.clone());
                 return Ok(e);
-            } else {
-                return Err(n);
             }
+            return Err(n);
         }
         return Ok(Box::new(types::ETString(input[0].literal())));
     }
@@ -165,9 +183,18 @@ impl ProcExecution for EPFloat {
         "FLOAT".to_owned()
     }
 
-    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
         if let Some(n) = assert_len(input.len(), 1) {
+            if input.len() == 2 {
+                let mut f = c.expect_variable(input[0].literal(), StrictType::Float)?.float().unwrap();
+                f.0 += expect_float(&input[1])?.0;
+                c.variables.insert(input[0].literal(), f.clone());
+                return Ok(f);
+            }
             return Err(n);
+        }
+        if let None = assert_type(&input[0], StrictType::Integer) {
+            return Ok(Box::new(types::ETFloat(input[0].int().unwrap().0 as f64)));
         }
         return Ok(Box::new(types::ETFloat::new(input[0].literal())?));
     }
@@ -230,7 +257,7 @@ impl ProcExecution for EPGet {
             Some(n) => Ok(n.get(expect_int(&input[1])?.0.clone() as usize)?.clone()),
             None => {
                 match input[0].map() {
-                    Some(n) => Ok(n.get(&input[1].literal())?),
+                    Some(n) => Ok(n.get(&input[1].literal())?), 
                     None => Err(Error::new(ErrorKind::InvalidInput, "Expected list or map")),
                 }
             }

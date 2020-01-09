@@ -1,0 +1,18 @@
+PROGRAM-ID TESTING
+ENTER-IN MAIN
+
+PROC MAIN
+	FLOAT num100.5
+		100.5
+	INT num130
+		10
+		20
+		*INT !num100.5 ;If the float has decimals, it must be used the INT PROC in order to use it as integer 
+	DISPLAY
+		!num100.5
+		!num130
+	FLOAT num140.75
+		!num130 ;It's not necessary to use the FLOAT PROC in order to use a integer as float
+		10
+		0.75
+	DISPLAY !num140.75
