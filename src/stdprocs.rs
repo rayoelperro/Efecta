@@ -265,6 +265,30 @@ impl ProcExecution for EPGet {
     }
 }
 
+#[derive(Clone)]
+pub struct EPOp(pub String);
+impl ProcExecution for EPOp {
+    fn name(&self) -> String {
+        self.0.to_owned()
+    }
+
+    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if let Some(e) = assert_len(input.len(), 2) {
+            return Err(e);
+        }
+        let f1 = expect_float(&input[0].clone())?;
+        let f2 = expect_float(&input[1].clone())?;
+        let s : &str = &self.0;
+        return Ok(Box::new(types::ETFloat(match s {
+            "SUM" => f1.0 + f2.0,
+            "SUB" => f1.0 - f2.0,
+            "MUL" => f1.0 * f2.0,
+            "DIV" => f1.0 / f2.0,
+            _ => Err(Error::new(ErrorKind::NotFound, "Operation not found"))?
+        })));
+    }
+}
+
 pub fn get_standard_procs() -> Vec<Box<dyn ProcExecution>> {
     return vec![
         Box::new(EPDisplay{}),
@@ -274,6 +298,10 @@ pub fn get_standard_procs() -> Vec<Box<dyn ProcExecution>> {
         Box::new(EPFloat{}),
         Box::new(EPLst{}),
         Box::new(EPMap{}),
-        Box::new(EPGet{})
+        Box::new(EPGet{}),
+        Box::new(EPOp("SUM".to_owned())),
+        Box::new(EPOp("SUB".to_owned())),
+        Box::new(EPOp("MUL".to_owned())),
+        Box::new(EPOp("DIV".to_owned())),
     ];
 }
