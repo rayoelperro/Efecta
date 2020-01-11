@@ -4,13 +4,10 @@ ENTER-IN MAIN
 PROC MAIN
 	LIT WELCOME #Hello, World
 	DISPLAY WELCOME ;a simple comment example
-	ENDL
 	PUSH
-		*LEN
-			*GET WELCOME
-	INT LENGTH
-		*RECV
+		*LEN $WELCOME
+	INT LENGTH $RECV
 	DISPLAY
-		*GET LENGTH
+		!LENGTH
 		#Now a number :
 		3.14 ;For example the beginning of pi

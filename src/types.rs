@@ -71,6 +71,10 @@ impl ETList {
         self.0.push(val);
     }
 
+    pub fn len(self) -> usize {
+        self.0.len()
+    }
+
     pub fn get(&self, idx : usize) -> Result<Box<dyn Value>, Error> {
         return match self.0.get(idx) {
             Some(n) => Ok(n.clone()),

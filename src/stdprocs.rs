@@ -106,13 +106,13 @@ pub fn expect_bool(v : &Box<dyn Value>) -> Result<Box<types::ETInt>, Error> {
     if let Some(_) = assert_type(v, StrictType::Integer) {
         if let Some(e) = assert_type_lit(v.literal(), LiteralParsableType::Integer) {
             let t : [&str; 5] = ["T", "TRUE", "t", "true", "True"];
-            let f : [&str; 5] = ["F", "FALSE", "f", "false", "FALSE"];
+            let f : [&str; 5] = ["F", "FALSE", "f", "false", "False"];
             if t.contains(&&v.literal()[..]) {
                 return Ok(Box::new(types::ETInt(1)));
             } else if f.contains(&&v.literal()[..]) {
                 return Ok(Box::new(types::ETInt(0)));
             } else {
-                return Err(e);
+                return Err(Error::new(ErrorKind::InvalidData, "Expected boolean"));
             }
         }
         return Ok(Box::new(types::ETInt::new(v.literal())?))
@@ -343,6 +343,22 @@ impl ProcExecution for EPIf {
 }
 
 #[derive(Clone)]
+pub struct EPTer;
+impl ProcExecution for EPTer {
+    fn name(&self) -> String {
+        "TER".to_owned()
+    }
+
+    fn run(&self, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if let Some(e) = assert_len(input.len(), 3) {
+            return Err(e);
+        }
+        let c = expect_bool(&input[0])?.0 != 0;
+        return Ok(if c {input[1].clone()}else{input[2].clone()});
+    }
+}
+
+#[derive(Clone)]
 pub struct EPPush;
 impl ProcExecution for EPPush {
     fn name(&self) -> String {
@@ -375,6 +391,41 @@ impl ProcExecution for EPRecv {
         let v : Box<dyn Value> = c.stack.get(0).unwrap().clone();
         c.stack.remove(0);
         return Ok(v);
+    }
+}
+
+#[derive(Clone)]
+pub struct EPLen;
+impl ProcExecution for EPLen {
+    fn name(&self) -> String {
+        "LEN".to_owned()
+    }
+
+    fn run(&self, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if let Some(e) = assert_len(input.len(), 1) {
+            return Err(e);
+        }
+        if let Some(e) = assert_type(&input[0], StrictType::List) {
+            return Err(e);
+        }
+        return Ok(Box::new(types::ETInt(input[0].list().unwrap().len() as i32)));
+    }
+}
+
+#[derive(Clone)]
+pub struct EPInput;
+impl ProcExecution for EPInput {
+    fn name(&self) -> String {
+        "INPUT".to_owned()
+    }
+
+    fn run(&self, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if let Some(e) = assert_len(input.len(), 0) {
+            return Err(e);
+        }
+        let mut data = String::new();
+        std::io::stdin().read_line(&mut data)?;
+        return Ok(Box::new(types::ETString(data.trim().to_owned())));
     }
 }
 
@@ -422,8 +473,11 @@ pub fn get_standard_procs() -> Vec<Box<dyn ProcExecution>> {
         Box::new(EPOp("MUL".to_owned())),
         Box::new(EPOp("DIV".to_owned())),
         Box::new(EPIf{}),
+        Box::new(EPTer{}),
         Box::new(EPPush{}),
         Box::new(EPRecv{}),
+        Box::new(EPLen{}),
+        Box::new(EPInput{}),
         Box::new(EPCon(true)),
         Box::new(EPCon(false)),
     ];

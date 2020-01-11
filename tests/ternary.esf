@@ -1,0 +1,11 @@
+PROGRAM-ID TERNARY_OPERATOR
+ENTER-IN MAIN
+
+PROC MAIN
+	DISPLAY #Type a boolean type:
+	LIT DATA $INPUT
+	PUSH
+		#A true value
+		#A false value
+	DISPLAY
+		*TER $DATA $RECV $RECV
