@@ -127,7 +127,7 @@ impl ProcExecution for EPDisplay {
         "DISPLAY".to_owned()
     }
 
-    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+    fn run(&self , input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
         if let Some(n) = assert_len(input.len(), 1) {
             return Err(n);
         }
@@ -143,7 +143,7 @@ impl ProcExecution for EPReturn {
         "RETURN".to_owned()
     }
 
-    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
+    fn run(&self , input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
         if let Some(n) = assert_len(input.len(), 1) {
             return Err(n);
         }
@@ -159,7 +159,7 @@ impl ProcExecution for EPInt {
         "INT".to_owned()
     }
 
-    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
+    fn run(&self , input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
         if let Some(n) = assert_len(input.len(), 1) {
             if input.len() == 2 {
                 let mut i = c.expect_variable(input[0].literal(), StrictType::Integer)?.int().unwrap();
@@ -183,7 +183,7 @@ impl ProcExecution for EPLit {
         "LIT".to_owned()
     }
 
-    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
+    fn run(&self , input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
         if let Some(n) = assert_len(input.len(), 1) {
             if input.len() == 2 {
                 let mut e = c.expect_variable(input[0].literal(), StrictType::Literal)?.stringval().unwrap();
@@ -204,7 +204,7 @@ impl ProcExecution for EPFloat {
         "FLOAT".to_owned()
     }
 
-    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
+    fn run(&self , input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
         if let Some(n) = assert_len(input.len(), 1) {
             if input.len() == 2 {
                 let mut f = c.expect_variable(input[0].literal(), StrictType::Float)?.float().unwrap();
@@ -228,7 +228,7 @@ impl ProcExecution for EPLst {
         "LST".to_owned()
     }
 
-    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
+    fn run(&self, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
         if let Some(n) = assert_len(input.len(), 1) {
             if input.len() == 2 {
                 let mut list = c.expect_variable(input[0].literal(), StrictType::List)?.list().unwrap();
@@ -249,7 +249,7 @@ impl ProcExecution for EPMap {
         "MAP".to_owned()
     }
 
-    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
+    fn run(&self, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
         if let Some(n) = assert_len(input.len(), 2) {
             if input.len() == 3 {
                 let mut map = c.expect_variable(input[0].literal(), StrictType::Map)?.map().unwrap();
@@ -270,7 +270,7 @@ impl ProcExecution for EPGet {
         "GET".to_owned()
     }
 
-    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+    fn run(&self, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
         if let Some(n) = assert_len(input.len(), 2) {
             return Err(n);
         }
@@ -293,7 +293,7 @@ impl ProcExecution for EPOp {
         self.0.to_owned()
     }
 
-    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+    fn run(&self, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
         if let Some(e) = assert_len(input.len(), 2) {
             return Err(e);
         }
@@ -317,7 +317,7 @@ impl ProcExecution for EPIf {
         "IF".to_owned()
     }
 
-    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, con : &mut Context) -> Result<Box<dyn Value>, Error> {
+    fn run(&self, input : Vec<Box<dyn Value>>, con : &mut Context) -> Result<Box<dyn Value>, Error> {
         if let Some(e) = assert_len(input.len(), 2) {
             return Err(e);
         }
@@ -342,6 +342,71 @@ impl ProcExecution for EPIf {
     }
 }
 
+#[derive(Clone)]
+pub struct EPPush;
+impl ProcExecution for EPPush {
+    fn name(&self) -> String {
+        "PUSH".to_owned()
+    }
+
+    fn run(&self, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if let Some(e) = assert_len(input.len(), 1) {
+            return Err(e);
+        }
+        c.stack.push(input[0].clone());
+        return Ok(Box::new(types::ETVoid{}));
+    }
+}
+
+#[derive(Clone)]
+pub struct EPRecv;
+impl ProcExecution for EPRecv {
+    fn name(&self) -> String {
+        "RECV".to_owned()
+    }
+
+    fn run(&self, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if let Some(e) = assert_len(input.len(), 0) {
+            return Err(e);
+        }
+        if c.stack.len() == 0 {
+            return Err(Error::new(ErrorKind::NotFound, "Trying to receive a value from void stack"))
+        }
+        let v : Box<dyn Value> = c.stack.get(0).unwrap().clone();
+        c.stack.remove(0);
+        return Ok(v);
+    }
+}
+
+#[derive(Clone)]
+pub struct EPCon(pub bool);
+impl ProcExecution for EPCon {
+    fn name(&self) -> String {
+        if self.0 {"JOIN"} else {"CON"}.to_owned()
+    }
+
+    fn run(&self, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+        let mut x = String::new();
+        if self.0 {
+            if input.len() < 1 {
+                return Err(Error::new(ErrorKind::InvalidInput, "Expected separator"));
+            } else {
+                x = input[0].literal();
+            }
+        }
+        let mut res = String::new();
+        for (i, v) in input.into_iter().enumerate() {
+            if i != 0 {
+                if i != 1 {
+                    res.push_str(&x);
+                }
+                res.push_str(&v.literal());
+            }
+        }
+        return Ok(Box::new(types::ETString(res)));
+    }
+}
+
 pub fn get_standard_procs() -> Vec<Box<dyn ProcExecution>> {
     return vec![
         Box::new(EPDisplay{}),
@@ -357,5 +422,9 @@ pub fn get_standard_procs() -> Vec<Box<dyn ProcExecution>> {
         Box::new(EPOp("MUL".to_owned())),
         Box::new(EPOp("DIV".to_owned())),
         Box::new(EPIf{}),
+        Box::new(EPPush{}),
+        Box::new(EPRecv{}),
+        Box::new(EPCon(true)),
+        Box::new(EPCon(false)),
     ];
 }

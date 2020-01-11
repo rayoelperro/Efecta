@@ -150,7 +150,11 @@ pub mod runtime {
             if p.is_literal() && (p.literal() == "$" || p.literal() == "!") {
                 nxc = true;
             } else if nxc {
-                res.push(c.get_var(&p.literal())?);
+                if let Ok(v) = c.get_var(&p.literal()) {
+                    res.push(v);
+                } else {
+                    res.push(c.get_proc(false, &p.literal())?.run(Vec::new(), c)?)
+                }
                 nxc = false;
             } else {
                 res.push(p);
@@ -186,32 +190,28 @@ pub mod runtime {
                 }
                 return Ok(vec![vec![Box::new(ETBlock(nblock))]]);
             } else if proc_scope || x > 0 {
-                if let Some(n) = c.get_proc(self.data[0] == "$", &self.data[x])? {
-                    let pr : Box<dyn ProcExecution> = n;
-                    let mut result : Vec<Vec<Box<dyn Value>>> = Vec::new();
-                    let mut args : Vec<Box<dyn Value>> =
-                        ETLiteral::literal_array(&self.data.clone().drain((x+1)..).collect());
-                    if self.data[0] == "$" {
-                        if let Some(n) = c.variables.get(&self.data[x]) {
-                            args.insert(0, n.clone());
-                        }
+                let pr : Box<dyn ProcExecution> = c.get_proc(self.data[0] == "$", &self.data[x])?;
+                let mut result : Vec<Vec<Box<dyn Value>>> = Vec::new();
+                let mut args : Vec<Box<dyn Value>> =
+                    ETLiteral::literal_array(&self.data.clone().drain((x+1)..).collect());
+                if self.data[0] == "$" {
+                    if let Some(n) = c.variables.get(&self.data[x]) {
+                        args.insert(0, n.clone());
                     }
-                    if self.subs.len() > 0 {
-                        for x in self.subs.iter() {
-                            for v in x.run(c, false)? {
-                                let res = parse_params(c, join_values(args.clone(), v.clone()))?;
-                                let ret = pr.run(c.instance, res, c)?;
-                                result.push(vec![ret]);
-                            }
-                        }
-                    } else {
-                        let ret = pr.run(c.instance, parse_params(c, args)?, c)?;
-                        result.push(vec![ret])
-                    }
-                    return Ok(result);
-                } else {
-                    return Err(Error::new(ErrorKind::NotFound, self.data[x].clone() + " proc not found"))
                 }
+                if self.subs.len() > 0 {
+                    for x in self.subs.iter() {
+                        for v in x.run(c, false)? {
+                            let res = parse_params(c, join_values(args.clone(), v.clone()))?;
+                            let ret = pr.run(res, c)?;
+                            result.push(vec![ret]);
+                        }
+                    }
+                } else {
+                    let ret = pr.run(parse_params(c, args)?, c)?;
+                    result.push(vec![ret])
+                }
+                return Ok(result);
             } else {
                 let mut total : Vec<Vec<Box<dyn Value>>> = Vec::new();
                 let local : Vec<Box<dyn Value>> = ETLiteral::literal_array(&self.data.clone());
@@ -235,8 +235,8 @@ pub mod runtime {
             self.name.clone()
         }
 
-        fn run(&self, ins : &RunningInstance, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
-            let mut context = Context::new(ins, input);
+        fn run(&self, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
+            let mut context = Context::new(c.instance, input);
             for b in self.mems.iter() {
                 if let Err(e) = b.run(&mut context, true) {
                     return Err(e);
@@ -260,7 +260,7 @@ pub mod runtime {
 
     pub struct Context<'a> {
         pub instance : &'a RunningInstance,
-        pub stack : Vec<String>,
+        pub stack : Vec<Box<dyn Value>>,
         pub variables : HashMap<String, Box<dyn Value>>,
         pub ret : Box<dyn Value>,
         pub running : bool
@@ -286,19 +286,19 @@ pub mod runtime {
             return c;
         }
 
-        pub fn get_proc(&self, variable : bool, name : &'a str) -> Result<Option<Box<dyn ProcExecution>>, Error> {
+        pub fn get_proc(&self, variable : bool, name : &'a str) -> Result<Box<dyn ProcExecution>, Error> {
             if variable {
                 if let Some(r) = (self.get_var(name)?).function() {
-                    return Ok(Some(r));
+                    return Ok(r);
                 }
             } else {
                 for x in 0..self.instance.methods.len() {
                     if self.instance.methods[x].name() == name {
-                        return Ok(Some(self.instance.methods[x].clone()));
+                        return Ok(self.instance.methods[x].clone());
                     }
                 }
             }
-            return Ok(None);
+            return Err(Error::new(ErrorKind::NotFound, name.to_owned() + " proc not found"));
         }
 
         pub fn get_var(&self, name : &'a str) -> Result<Box<dyn Value>, Error> {
@@ -370,7 +370,7 @@ pub mod runtime {
 
     pub trait ProcExecution : CloneProc {
         fn name(&self) -> String;
-        fn run(&self, ins : &RunningInstance, input : Vec<Box<dyn Value>>, context : &mut Context) -> Result<Box<dyn Value>, Error>;
+        fn run(&self, input : Vec<Box<dyn Value>>, context : &mut Context) -> Result<Box<dyn Value>, Error>;
     }
 
     impl<T> CloneProc for T where T : 'static + ProcExecution + Clone {
@@ -434,7 +434,7 @@ pub mod execution {
                 let standard = get_standard_procs();
                 let r = RunningInstance::from(self.clone(), standard);
                 let args = ETLiteral::literal_array(&string_args(std::env::args()));
-                return match x.run(&r, args.clone(), &mut Context::new(&r, args)) {
+                return match x.run(args.clone(), &mut Context::new(&r, args)) {
                     Ok(_) => Ok(0),
                     Err(e) => Err(e),
                 }

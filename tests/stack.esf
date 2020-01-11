@@ -1,0 +1,11 @@
+PROGRAM-ID STACKTEST
+ENTER-IN MAIN
+
+PROC MAIN
+	PUSH
+		Hello
+		every
+		body
+	DISPLAY
+		*JOIN # 
+			!RECV !RECV !RECV
