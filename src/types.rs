@@ -156,6 +156,18 @@ impl ETLiteral {
     }
 }
 
+#[derive(Clone)]
+pub struct ETBlock(pub crate::core::Block);
+impl Value for ETBlock {
+    fn literal(&self) -> String {
+        return "TODO: BLOCK Literal".to_owned();
+    }
+
+    fn block(&self) -> Option<Box<ETBlock>> {
+        return Some(Box::new(self.clone()));
+    }
+}
+
 pub fn join_values<'a>(a : Vec<Box<dyn Value>>, b : Vec<Box<dyn Value>>) -> Vec<Box<dyn Value>> {
     let mut res : Vec<Box<dyn Value>> = Vec::new();
     for i in a {

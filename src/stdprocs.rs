@@ -9,7 +9,8 @@ pub enum StrictType {
     Char,
     List,
     Map,
-    Literal
+    Literal,
+    Block,
 }
 
 pub enum LiteralParsableType {
@@ -26,6 +27,7 @@ fn value_from_type(stype : StrictType) -> Box<dyn Value> {
         StrictType::List => Box::new(types::ETList(Vec::new())),
         StrictType::Map => Box::new(types::ETMap(HashMap::new())),
         StrictType::Literal => Box::new(types::ETString(String::new())),
+        StrictType::Block => Box::new(types::ETBlock(crate::core::Block{subs:Vec::new(), data:Vec::new()})),
     }
 }
 
@@ -59,6 +61,7 @@ pub fn assert_type(data : &Box<dyn Value>, exp : StrictType) -> Option<Error> {
         StrictType::List => if let None = data.list() {expected.push_str("List")}
         StrictType::Map => if let None = data.map() {expected.push_str("Map")}
         StrictType::Literal => {}
+        StrictType::Block => if let None = data.block() {expected.push_str("Block")}
     }
     if expected.is_empty() {
         return None;
@@ -97,6 +100,24 @@ pub fn expect_float(v : &Box<dyn Value>) -> Result<Box<types::ETFloat>, Error> {
         return Ok(Box::new(types::ETFloat::new(v.literal())?))
     }
     return Ok(v.float().unwrap());
+}
+
+pub fn expect_bool(v : &Box<dyn Value>) -> Result<Box<types::ETInt>, Error> {
+    if let Some(_) = assert_type(v, StrictType::Integer) {
+        if let Some(e) = assert_type_lit(v.literal(), LiteralParsableType::Integer) {
+            let t : [&str; 5] = ["T", "TRUE", "t", "true", "True"];
+            let f : [&str; 5] = ["F", "FALSE", "f", "false", "FALSE"];
+            if t.contains(&&v.literal()[..]) {
+                return Ok(Box::new(types::ETInt(1)));
+            } else if f.contains(&&v.literal()[..]) {
+                return Ok(Box::new(types::ETInt(0)));
+            } else {
+                return Err(e);
+            }
+        }
+        return Ok(Box::new(types::ETInt::new(v.literal())?))
+    }
+    return Ok(v.int().unwrap());
 }
 
 #[derive(Clone)]
@@ -289,6 +310,38 @@ impl ProcExecution for EPOp {
     }
 }
 
+#[derive(Clone)]
+pub struct EPIf;
+impl ProcExecution for EPIf {
+    fn name(&self) -> String {
+        "IF".to_owned()
+    }
+
+    fn run(&self, _ : &RunningInstance, input : Vec<Box<dyn Value>>, con : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if let Some(e) = assert_len(input.len(), 2) {
+            return Err(e);
+        }
+        let c = expect_bool(&input[0])?.0 != 0;
+        if let Some(e) = assert_type(&input[1], StrictType::Block) {
+            return Err(e);
+        }
+        let b : crate::core::Block = input[1].block().unwrap().0;
+        match &b.data[0][..] {
+            "THEN" | "ELSE" => {
+                if c ^ (b.data[0] == "ELSE") {
+                    let mut n = con.clone();
+                    for x in b.subs.into_iter() {
+                        x.run(&mut n, true)?;
+                    }
+                    con.pour(n);
+                }
+            }
+            _ => return Err(Error::new(ErrorKind::InvalidData, "Wrong behaviour tag"))
+        }
+        return Ok(Box::new(types::ETVoid{}));
+    }
+}
+
 pub fn get_standard_procs() -> Vec<Box<dyn ProcExecution>> {
     return vec![
         Box::new(EPDisplay{}),
@@ -303,5 +356,6 @@ pub fn get_standard_procs() -> Vec<Box<dyn ProcExecution>> {
         Box::new(EPOp("SUB".to_owned())),
         Box::new(EPOp("MUL".to_owned())),
         Box::new(EPOp("DIV".to_owned())),
+        Box::new(EPIf{}),
     ];
 }

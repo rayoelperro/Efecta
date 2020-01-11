@@ -31,7 +31,7 @@ processes, influenced by COBOl syntax, with stack based design and functional pr
     };
 }
 
-fn iterblock(f : core::Block, lev : i32) {
+/*fn iterblock(f : core::Block, lev : i32) {
     for _ in 0..lev {
         print!("()");
     }
@@ -42,7 +42,7 @@ fn iterblock(f : core::Block, lev : i32) {
     for x in f.subs.into_iter() {
         iterblock(x, lev+1);
     }
-}
+}*/
 
 fn run_program(src_file : &str) -> Result<i32, Error>{
     //1st LEXER

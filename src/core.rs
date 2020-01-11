@@ -67,7 +67,7 @@ pub mod lexer {
                         }
                         break;
                     }
-                    '*' | '$' | '!' => {
+                    '*' | '$' | '!' | ':' => {
                         mxt = true;
                         if act.chars().count() > 0 {
                             ret.push(act);
@@ -135,7 +135,7 @@ pub mod runtime {
     use std::collections::HashMap;
     use std::io::{Error, ErrorKind};
     use crate::core::{ProgramInstance, Proc, Block};
-    use crate::types::{join_values, ETInt, ETFloat, ETList, ETMap, ETLiteral, ETString};
+    use crate::types::{join_values, ETInt, ETFloat, ETList, ETMap, ETLiteral, ETString, ETBlock};
 
     pub struct RunningInstance {
         pub name : String,
@@ -172,11 +172,20 @@ pub mod runtime {
             return (Block{subs:self.subs.clone(), data:data.drain(1..).collect()}, data.len()-1, true);
         }
 
-        fn run(&self, c : &mut Context, proc_scope : bool) -> Result<Vec<Vec<Box<dyn Value>>>, Error> {
-            let x = if self.data[0] == "*" || self.data[0] == "$" {1} else {0};
-            if x == 1 && proc_scope {
+        pub fn run(&self, c : &mut Context, proc_scope : bool) -> Result<Vec<Vec<Box<dyn Value>>>, Error> {
+            let x = if self.data[0] == "*" || self.data[0] == "$" || self.data[0] == ":" {1} else {0};
+            if self.data.len()-1 < x {
+                return Err(Error::new(ErrorKind::InvalidData, "Expected function"));
+            } else if self.data[0] == "*" && proc_scope {
                 return Err(Error::new(ErrorKind::InvalidData, "Not necessary execution specifier"));
-            } else if proc_scope || x == 1 {
+            } else if x > 0 && self.data[0] == ":" {
+                let mut nblock = self.clone();
+                nblock.data.remove(0);
+                if nblock.data.len() != 1 {
+                    return Err(Error::new(ErrorKind::InvalidData, "Block tag must have just tag's name as member"));
+                }
+                return Ok(vec![vec![Box::new(ETBlock(nblock))]]);
+            } else if proc_scope || x > 0 {
                 if let Some(n) = c.get_proc(self.data[0] == "$", &self.data[x])? {
                     let pr : Box<dyn ProcExecution> = n;
                     let mut result : Vec<Vec<Box<dyn Value>>> = Vec::new();
@@ -257,6 +266,18 @@ pub mod runtime {
         pub running : bool
     }
 
+    impl<'a> Clone for Context<'a> {
+        fn clone(&self) -> Self {
+            return Context{
+                instance : self.instance.clone(),
+                stack : self.stack.clone(),
+                variables : self.variables.clone(),
+                ret : self.ret.clone(),
+                running : self.running.clone(),
+            }
+        }
+    }
+
     impl<'a> Context<'a> {
         pub fn new(ins : &'a RunningInstance, input : Vec<Box<dyn Value>>) -> Self {
             let mut c = Context{instance:ins, stack:Vec::new(), variables:HashMap::new(),
@@ -286,6 +307,17 @@ pub mod runtime {
             }
             return Err(Error::new(ErrorKind::InvalidInput, "Error searching variable"));
         }
+
+        pub fn pour(&mut self, sub : Context) {
+            self.ret = sub.ret;
+            self.running = sub.running;
+            self.stack = sub.stack;
+            for (i, c) in sub.variables.into_iter() {
+                if self.variables.contains_key(&i) {
+                    self.variables.insert(i, c);
+                }
+            }
+        }
     }
 
     pub trait CloneValue {
@@ -313,6 +345,9 @@ pub mod runtime {
             false
         }
         fn function(&self) -> Option<Box<dyn ProcExecution>> {
+            None
+        }
+        fn block(&self) -> Option<Box<ETBlock>> {
             None
         }
     }
