@@ -1,4 +1,4 @@
-use crate::core::runtime::{RunningInstance, ProcExecution, Value, Context};
+use crate::core::runtime::{ProcExecution, Value, Context};
 use std::io::{Error, ErrorKind};
 use crate::types;
 use std::collections::HashMap;
@@ -87,9 +87,19 @@ pub fn expect_int(v : &Box<dyn Value>) -> Result<Box<types::ETInt>, Error> {
         if let Some(e) = assert_type_lit(v.literal(), LiteralParsableType::Integer) {
             return Err(e);
         }
-        return Ok(Box::new(types::ETInt::new(v.literal())?))
+        return Ok(Box::new(types::ETInt::new(v.literal())?));
     }
     return Ok(v.int().unwrap());
+}
+
+pub fn expect_char(v : &Box<dyn Value>) -> Result<Box<types::ETString>, Error> {
+    if let Some(_) = assert_type(v, StrictType::Char) {
+        if let Some(e) = assert_type_lit(v.literal(), LiteralParsableType::Char) {
+            return Err(e);
+        }
+        return Ok(Box::new(types::ETString(v.literal())));
+    }
+    return Ok(Box::new(types::ETString(v.literal())));
 }
 
 pub fn expect_float(v : &Box<dyn Value>) -> Result<Box<types::ETFloat>, Error> {
@@ -97,14 +107,14 @@ pub fn expect_float(v : &Box<dyn Value>) -> Result<Box<types::ETFloat>, Error> {
         if let Some(e) = assert_type_lit(v.literal(), LiteralParsableType::Float) {
             return Err(e);
         }
-        return Ok(Box::new(types::ETFloat::new(v.literal())?))
+        return Ok(Box::new(types::ETFloat::new(v.literal())?));
     }
     return Ok(v.float().unwrap());
 }
 
 pub fn expect_bool(v : &Box<dyn Value>) -> Result<Box<types::ETInt>, Error> {
     if let Some(_) = assert_type(v, StrictType::Integer) {
-        if let Some(e) = assert_type_lit(v.literal(), LiteralParsableType::Integer) {
+        if let Some(_) = assert_type_lit(v.literal(), LiteralParsableType::Integer) {
             let t : [&str; 5] = ["T", "TRUE", "t", "true", "True"];
             let f : [&str; 5] = ["F", "FALSE", "f", "false", "False"];
             if t.contains(&&v.literal()[..]) {
@@ -115,7 +125,7 @@ pub fn expect_bool(v : &Box<dyn Value>) -> Result<Box<types::ETInt>, Error> {
                 return Err(Error::new(ErrorKind::InvalidData, "Expected boolean"));
             }
         }
-        return Ok(Box::new(types::ETInt::new(v.literal())?))
+        return Ok(Box::new(types::ETInt::new(v.literal())?));
     }
     return Ok(v.int().unwrap());
 }
@@ -458,6 +468,22 @@ impl ProcExecution for EPCon {
     }
 }
 
+#[derive(Clone)]
+pub struct EPCharnum(pub bool);
+impl ProcExecution for EPCharnum {
+    fn name(&self) -> String {
+        if self.0 {"CHR"} else {"ORD"}.to_owned()
+    }
+
+    fn run(&self, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if self.0 {
+            Ok(Box::new(types::ETString(std::char::from_u32(expect_int(&input[0])?.0 as u32).unwrap().to_string())))
+        } else {
+            Ok(Box::new(types::ETInt(expect_char(&input[0])?.literal().chars().nth(0).unwrap() as i32)))
+        }
+    }
+}
+
 pub fn get_standard_procs() -> Vec<Box<dyn ProcExecution>> {
     return vec![
         Box::new(EPDisplay{}),
@@ -480,5 +506,7 @@ pub fn get_standard_procs() -> Vec<Box<dyn ProcExecution>> {
         Box::new(EPInput{}),
         Box::new(EPCon(true)),
         Box::new(EPCon(false)),
+        Box::new(EPCharnum(true)),
+        Box::new(EPCharnum(false)),
     ];
 }

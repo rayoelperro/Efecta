@@ -1,0 +1,11 @@
+PROGRAM-ID CHR_ORD
+ENTER-IN MAIN
+
+PROC MAIN
+	INT h
+		*ORD H
+	LIT val_h
+		*CHR $h
+	DISPLAY
+		!h
+		!val_h
