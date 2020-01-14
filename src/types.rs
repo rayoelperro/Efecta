@@ -172,6 +172,38 @@ impl Value for ETBlock {
     }
 }
 
+#[derive(Clone)]
+pub struct ETAlias(pub Box<dyn Value>, pub Box<dyn Value>); //0 is the mask that works as type but the function will be attached to 1
+impl Value for ETAlias {
+    fn list(&self) -> Option<Box<ETList>> {
+        self.0.list()
+    }
+    fn map(&self) -> Option<Box<ETMap>> {
+        self.0.map()
+    }
+    fn int(&self) -> Option<Box<ETInt>> {
+        self.0.int()
+    }
+    fn float(&self) -> Option<Box<ETFloat>> {
+        self.0.float()
+    }
+    fn stringval(&self) -> Option<Box<ETString>> {
+        self.0.stringval()
+    }
+    fn literal(&self) -> String {
+        self.0.literal()
+    }
+    fn function(&self) -> Option<Box<dyn ProcExecution>> {
+        self.1.function()
+    }
+    fn block(&self) -> Option<Box<ETBlock>> {
+        self.0.block()
+    }
+    fn target(&self) -> Box<dyn Value> {
+        self.1.clone_box()
+    }
+}
+
 pub fn join_values<'a>(a : Vec<Box<dyn Value>>, b : Vec<Box<dyn Value>>) -> Vec<Box<dyn Value>> {
     let mut res : Vec<Box<dyn Value>> = Vec::new();
     for i in a {

@@ -196,7 +196,7 @@ pub mod runtime {
                     ETLiteral::literal_array(&self.data.clone().drain((x+1)..).collect());
                 if self.data[0] == "$" {
                     if let Some(n) = c.variables.get(&self.data[x]) {
-                        args.insert(0, n.clone());
+                        args.insert(0, n.target().clone());
                     }
                 }
                 if self.subs.len() > 0 {
@@ -349,6 +349,9 @@ pub mod runtime {
         }
         fn block(&self) -> Option<Box<ETBlock>> {
             None
+        }
+        fn target(&self) -> Box<dyn Value> {
+            self.clone_box()
         }
     }
 

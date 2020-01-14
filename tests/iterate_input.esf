@@ -1,0 +1,11 @@
+PROGRAM-ID ITINPUT
+ENTER-IN MAIN
+
+PROC MAIN
+	DISPLAY #Type Something:
+	ITER val $INPUT
+		:THEN
+			DISPLAY
+				*JOIN #, 
+					!val
+						$val IDX

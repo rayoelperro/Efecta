@@ -484,6 +484,44 @@ impl ProcExecution for EPCharnum {
     }
 }
 
+#[derive(Clone)]
+pub struct EPIter;
+impl ProcExecution for EPIter {
+    fn name(&self) -> String {
+        "ITER".to_owned()
+    }
+
+    fn run(&self, input : Vec<Box<dyn Value>>, con : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if let Some(e) = assert_len(input.len(), 3) {
+            return Err(e);
+        }
+        let alias = input[0].literal();
+        if let Some(e) = assert_type(&input[1], StrictType::List) {
+            return Err(e);
+        }
+        let list = input[1].list().unwrap();
+        if let Some(e) = assert_type(&input[2], StrictType::Block) {
+            return Err(e);
+        }
+        let b : crate::core::Block = input[2].block().unwrap().0;
+        match &b.data[0][..] {
+            "THEN" => {
+                for (i, v) in list.0.into_iter().enumerate() {
+                    let mut n = con.clone();
+                    n.variables.insert(alias.clone(), Box::new(types::ETAlias(v,
+                        Box::new(types::ETMap::new("IDX".to_owned(), Box::new(types::ETInt(i as i32)))))));
+                    for x in b.subs.iter() {
+                        x.run(&mut n, true)?;
+                    }
+                    con.pour(n);
+                }
+            }
+            _ => return Err(Error::new(ErrorKind::InvalidData, "Wrong behaviour tag"))
+        }
+        return Ok(Box::new(types::ETVoid{}));
+    }
+}
+
 pub fn get_standard_procs() -> Vec<Box<dyn ProcExecution>> {
     return vec![
         Box::new(EPDisplay{}),
@@ -508,5 +546,6 @@ pub fn get_standard_procs() -> Vec<Box<dyn ProcExecution>> {
         Box::new(EPCon(false)),
         Box::new(EPCharnum(true)),
         Box::new(EPCharnum(false)),
+        Box::new(EPIter{}),
     ];
 }
