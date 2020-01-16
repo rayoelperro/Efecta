@@ -135,8 +135,9 @@ pub mod runtime {
     use std::collections::HashMap;
     use std::io::{Error, ErrorKind};
     use crate::core::{ProgramInstance, Proc, Block};
-    use crate::types::{join_values, ETInt, ETFloat, ETList, ETMap, ETLiteral, ETString, ETBlock};
+    use crate::types::{join_values, ETVoid, ETInt, ETFloat, ETList, ETMap, ETLiteral, ETString, ETBlock, ETType};
 
+    #[derive(Clone)]
     pub struct RunningInstance {
         pub name : String,
         pub entry_point : String,
@@ -174,6 +175,17 @@ pub mod runtime {
                 return (self.clone(), data.len(), false);
             }
             return (Block{subs:self.subs.clone(), data:data.drain(1..).collect()}, data.len()-1, true);
+        }
+
+        pub fn run_named(&self, con : &mut Context) -> Result<Box<dyn Value>, Error> {
+            let mut lastval : Box<dyn Value> = Box::new(ETVoid{});
+            for x in self.subs.clone().into_iter() {
+                lastval = match x.run(con, true)?.last() {
+                    Some(n) => if n.len() > 1 {Box::new(ETList(n.clone()))} else {n[0].clone()},
+                    None => Box::new(ETVoid{})
+                }
+            }
+            return Ok(lastval);
         }
 
         pub fn run(&self, c : &mut Context, proc_scope : bool) -> Result<Vec<Vec<Box<dyn Value>>>, Error> {
@@ -236,7 +248,7 @@ pub mod runtime {
         }
 
         fn run(&self, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
-            let mut context = Context::new(c.instance, input);
+            let mut context = Context::new(c.instance.clone(), input);
             for b in self.mems.iter() {
                 if let Err(e) = b.run(&mut context, true) {
                     return Err(e);
@@ -258,15 +270,15 @@ pub mod runtime {
         }
     }
 
-    pub struct Context<'a> {
-        pub instance : &'a RunningInstance,
+    pub struct Context {
+        pub instance : Box<RunningInstance>,
         pub stack : Vec<Box<dyn Value>>,
         pub variables : HashMap<String, Box<dyn Value>>,
         pub ret : Box<dyn Value>,
         pub running : bool
     }
 
-    impl<'a> Clone for Context<'a> {
+    impl Clone for Context {
         fn clone(&self) -> Self {
             return Context{
                 instance : self.instance.clone(),
@@ -278,12 +290,16 @@ pub mod runtime {
         }
     }
 
-    impl<'a> Context<'a> {
-        pub fn new(ins : &'a RunningInstance, input : Vec<Box<dyn Value>>) -> Self {
+    impl<'a> Context {
+        pub fn new(ins : Box<RunningInstance>, input : Vec<Box<dyn Value>>) -> Self {
             let mut c = Context{instance:ins, stack:Vec::new(), variables:HashMap::new(),
                 ret:Box::new(crate::types::ETVoid{}), running:true};
-            c.variables.insert("ARGS".to_owned(), Box::new(ETList(input)));
+            c.apply_args(input);
             return c;
+        }
+
+        pub fn apply_args(&mut self, args : Vec<Box<dyn Value>>) {
+            self.variables.insert("ARGS".to_owned(), Box::new(ETList(args)));
         }
 
         pub fn get_proc(&self, variable : bool, name : &'a str) -> Result<Box<dyn ProcExecution>, Error> {
@@ -348,6 +364,9 @@ pub mod runtime {
             None
         }
         fn block(&self) -> Option<Box<ETBlock>> {
+            None
+        }
+        fn custom_type(&self) -> Option<Box<ETType>> {
             None
         }
         fn target(&self) -> Box<dyn Value> {
@@ -437,7 +456,7 @@ pub mod execution {
                 let standard = get_standard_procs();
                 let r = RunningInstance::from(self.clone(), standard);
                 let args = ETLiteral::literal_array(&string_args(std::env::args()));
-                return match x.run(args.clone(), &mut Context::new(&r, args)) {
+                return match x.run(args.clone(), &mut Context::new(Box::new(r), args)) {
                     Ok(_) => Ok(0),
                     Err(e) => Err(e),
                 }

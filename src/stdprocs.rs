@@ -31,7 +31,7 @@ fn value_from_type(stype : StrictType) -> Box<dyn Value> {
     }
 }
 
-impl<'a> Context<'a> {    
+impl Context {    
     fn expect_variable(&self, name : String, stype : StrictType) -> Result<Box<dyn Value>, Error> {
         match self.get_var(&name) {
             Ok(v) => if let Some(_) = assert_type(&v, stype) {
@@ -340,9 +340,7 @@ impl ProcExecution for EPIf {
             "THEN" | "ELSE" => {
                 if c ^ (b.data[0] == "ELSE") {
                     let mut n = con.clone();
-                    for x in b.subs.into_iter() {
-                        x.run(&mut n, true)?;
-                    }
+                    b.run_named(&mut n)?;
                     con.pour(n);
                 }
             }
@@ -522,6 +520,87 @@ impl ProcExecution for EPIter {
     }
 }
 
+#[derive(Clone)]
+pub struct EPType;
+impl ProcExecution for EPType {
+    fn name(&self) -> String {
+        "TYPE".to_owned()
+    }
+
+    fn run(&self, input : Vec<Box<dyn Value>>, con : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if let Some(e) = assert_len(input.len(), 2) {
+            return Err(e);
+        }
+        let mut custom = match con.variables.get(&input[0].literal()) {
+            Some(n) => match n.custom_type() {
+                Some(v) => v,
+                None => return Err(Error::new(ErrorKind::InvalidInput, "Custom type expected"))
+            }
+            None => Box::new(types::ETType::void(con.clone()))
+        };
+        if let Some(e) = assert_type(&input[1], StrictType::Block) {
+            return Err(e);
+        }
+        custom.add(input[1].clone().block().unwrap().0, con.clone());
+        con.variables.insert(input[0].literal(), custom);
+        return Ok(Box::new(types::ETVoid{}))
+    }
+}
+
+#[derive(Clone)]
+pub struct EPInv;
+impl ProcExecution for EPInv {
+    fn name(&self) -> String {
+        "INV".to_owned()
+    }
+
+    fn run(&self, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if input.len() < 2 {
+            return Err(Error::new(ErrorKind::InvalidData, "Expected at least two argument"));
+        }
+        if let None = input[0].custom_type() {
+            return Err(Error::new(ErrorKind::InvalidData, "Expected custom type"));
+        }
+        return input[0].custom_type().unwrap().inv(&input[1].literal(), input.clone().drain(2..).collect());
+    }
+}
+
+#[derive(Clone)]
+pub struct EPNew;
+impl ProcExecution for EPNew {
+    fn name(&self) -> String {
+        "NEW".to_owned()
+    }
+
+    fn run(&self, input : Vec<Box<dyn Value>>, _ : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if input.len() < 1 {
+            return Err(Error::new(ErrorKind::InvalidData, "Expected at least one argument"));
+        }
+        if let None = input[0].custom_type() {
+            return Err(Error::new(ErrorKind::InvalidData, "Expected custom type"));
+        }
+        let mut t = input[0].custom_type().unwrap();
+        t.apply_args(input.clone().drain(1..).collect());
+        return Ok(t);
+    }
+}
+
+#[derive(Clone)]
+pub struct EPSave;
+impl ProcExecution for EPSave {
+    fn name(&self) -> String {
+        "SAVE".to_owned()
+    }
+
+    fn run(&self, input : Vec<Box<dyn Value>>, c : &mut Context) -> Result<Box<dyn Value>, Error> {
+        if let Some(e) = assert_len(input.len(), 2) {
+            return Err(e);
+        }
+        c.variables.insert(input[0].literal(), input[1].clone());
+        return Ok(input[1].clone());
+    }
+}
+
 pub fn get_standard_procs() -> Vec<Box<dyn ProcExecution>> {
     return vec![
         Box::new(EPDisplay{}),
@@ -547,5 +626,9 @@ pub fn get_standard_procs() -> Vec<Box<dyn ProcExecution>> {
         Box::new(EPCharnum(true)),
         Box::new(EPCharnum(false)),
         Box::new(EPIter{}),
+        Box::new(EPType{}),
+        Box::new(EPInv{}),
+        Box::new(EPNew{}),
+        Box::new(EPSave{}),
     ];
 }

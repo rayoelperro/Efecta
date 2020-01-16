@@ -1,4 +1,4 @@
-use crate::core::runtime::{Value, ProcExecution};
+use crate::core::runtime::{Value, ProcExecution, Context};
 use std::io::{Error, ErrorKind};
 use crate::stdprocs as procs;
 use std::collections::HashMap;
@@ -199,12 +199,119 @@ impl Value for ETAlias {
     fn block(&self) -> Option<Box<ETBlock>> {
         self.0.block()
     }
+    fn custom_type(&self) -> Option<Box<ETType>> {
+        self.0.custom_type()
+    }
     fn target(&self) -> Box<dyn Value> {
         self.1.clone_box()
     }
 }
 
-pub fn join_values<'a>(a : Vec<Box<dyn Value>>, b : Vec<Box<dyn Value>>) -> Vec<Box<dyn Value>> {
+#[derive(Clone)]
+pub struct ETType {
+    methods : HashMap<String,(crate::core::Block, Context)>,
+    selfc : Context,
+}
+impl Value for ETType {
+    fn list(&self) -> Option<Box<ETList>> {
+        match self.get("LIST") {
+            Some(n) => n.list(),
+            None => None            
+        }
+    }
+    fn map(&self) -> Option<Box<ETMap>> {
+        match self.get("MAP") {
+            Some(n) => n.map(),
+            None => None            
+        }
+    }
+    fn int(&self) -> Option<Box<ETInt>> {
+        match self.get("INT") {
+            Some(n) => n.int(),
+            None => None            
+        }
+    }
+    fn float(&self) -> Option<Box<ETFloat>> {
+        match self.get("FLOAT") {
+            Some(n) => n.float(),
+            None => None            
+        }
+    }
+    fn stringval(&self) -> Option<Box<ETString>> {
+        match self.get("STR") {
+            Some(n) => n.stringval(),
+            None => None            
+        }
+    }
+    fn literal(&self) -> String {
+        match self.get("LIT") {
+            Some(n) => n.literal(),
+            None => "CUSTOM TYPE".to_owned()  
+        }
+    }
+    fn function(&self) -> Option<Box<dyn ProcExecution>> {
+        return Some(Box::new(procs::EPInv{}));
+    }
+    fn block(&self) -> Option<Box<ETBlock>> {
+        match self.get("BLOCK") {
+            Some(n) => n.block(),
+            None => None            
+        }
+    }
+    fn custom_type(&self) -> Option<Box<ETType>> {
+        return Some(Box::new(self.clone()))
+    }
+}
+impl ETType {
+    fn get<'a>(&self, name : &'a str) -> Option<Box<dyn Value>> {
+        return match self.methods.get(name) {
+            Some(b) => match b.0.run_named(&mut b.clone().1) {
+                Ok(b) => Some(b),
+                Err(_) => None
+            }
+            None => None
+        }
+    }
+
+    pub fn inv<'a>(&mut self, name : &'a str, params : Vec<Box<dyn Value>>) -> Result<Box<dyn Value>, Error> {
+        return match self.methods.get(name) {
+            Some(b) => {
+                let mut c = self.create_context(b.1.clone());
+                c.apply_args(params);
+                match b.0.run_named(&mut c) {
+                    Ok(b) => {
+                        self.selfc.pour(c);
+                        Ok(b)
+                    }
+                    Err(e) => Err(e)
+                }
+            }
+            None => Err(Error::new(ErrorKind::NotFound, "Error searching method"))
+        }
+    }
+
+    fn create_context<'a>(&self, base : Context) -> Context {
+        let mut c = base.clone();
+        for (k, v) in self.selfc.variables.clone().into_iter() {
+            c.variables.insert(k, v);
+        }
+        return c;
+    }
+
+    pub fn void(base : Context) -> Self {
+        return ETType{methods:HashMap::new(), selfc:base}
+    }
+
+    pub fn add(&mut self, b : crate::core::Block, c : Context) {
+        self.methods.insert(b.data[0].clone(), (b, c));
+    }
+
+    pub fn apply_args(&mut self, args : Vec<Box<dyn Value>>) {
+        self.selfc.variables.insert("SELF".to_owned(), Box::new(ETList(args)));
+    }
+}
+
+pub fn join_values(a : Vec<Box<dyn Value>>, b : Vec<Box<dyn Value>>) -> Vec<Box<dyn Value>> {
     let mut res : Vec<Box<dyn Value>> = Vec::new();
     for i in a {
         res.push(i);
